@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Método Pré-Vestibular",
+    "slug": "metodo-system",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F1333F"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F1333F"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "name": "Método App",
+      "shortName": "Método",
+      "themeColor": "#F1333F",
+      "backgroundColor": "#FFFFFF",
+      "display": "standalone",
+      "orientation": "portrait"
+    },
+    "plugins": [
+      "expo-font"
+    ]
+  }
+}

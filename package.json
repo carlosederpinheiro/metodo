@@ -1,0 +1,30 @@
+{
+  "name": "metodo-system",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "predeploy": "expo export -p web",
+    "deploy": "gh-pages -d dist"
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "~3.2.3",
+    "@expo/vector-icons": "^14.0.3",
+    "expo": "~51.0.0",
+    "expo-font": "~12.0.10",
+    "expo-modules-core": "~1.12.26",
+    "expo-status-bar": "~1.12.1",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-native": "0.74.5",
+    "react-native-web": "~0.19.10"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.20.0",
+    "gh-pages": "^6.1.1"
+  },
+  "private": true
+}

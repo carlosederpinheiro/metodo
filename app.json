@@ -31,6 +31,9 @@
     },
     "plugins": [
       "expo-font"
-    ]
+    ],
+    "experiments": {
+      "baseUrl": "/metodo"
+    }
   }
 }

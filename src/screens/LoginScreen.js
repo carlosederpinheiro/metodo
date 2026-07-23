@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
+import PWAInstallPrompt from '../components/PWAInstallPrompt';
 
 export default function LoginScreen({ onLogin }) {
   const [role, setRole] = useState('teacher'); // 'teacher' | 'admin'
@@ -249,6 +250,9 @@ export default function LoginScreen({ onLogin }) {
           © Método Pré-Vestibular • Todos os direitos reservados
         </Text>
       </View>
+      
+      {/* Banner de Instalação PWA (Fica flutuante sobre a tela) */}
+      <PWAInstallPrompt />
     </KeyboardAvoidingView>
   );
 

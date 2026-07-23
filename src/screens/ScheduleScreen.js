@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -11,11 +11,13 @@ import {
   FlatList,
   Alert,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import AttendanceScreen from './AttendanceScreen';
 import NewCallModal from '../components/NewCallModal';
+import { supabase } from '../services/supabase';
 
 // Dados simulados de tempos de aula por data
 const mockSchedules = {
@@ -185,11 +187,90 @@ const weekDays = [
   { dayName: 'SÁB', dayNum: '25', dateStr: '2026-07-25', isToday: false },
 ];
 
-export default function ScheduleScreen({ onLogout, teacherName = 'Prof. Carlos Eder', allStudents = [] }) {
-  const [selectedDate, setSelectedDate] = useState('2026-07-20');
-  const [schedulesData, setSchedulesData] = useState(mockSchedules);
+export default function ScheduleScreen({ onLogout, teacherName = 'Prof. Carlos Eder' }) {
+  // Ajuste para hoje (YYYY-MM-DD local)
+  const todayStr = new Date().toLocaleDateString('en-CA');
+  
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+  const [schedulesData, setSchedulesData] = useState({});
+  const [allStudents, setAllStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [activeClassForAttendance, setActiveClassForAttendance] = useState(null);
   const [isNewCallModalVisible, setIsNewCallModalVisible] = useState(false);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      // Busca as turmas e professores para relacionar
+      const { data: schedules } = await supabase
+        .from('master_schedules')
+        .select('*, groups(name), professors(name)');
+      
+      const { data: students } = await supabase
+        .from('students')
+        .select('*, groups(name)');
+
+      // Busca chamadas já realizadas para não recriar
+      const { data: attendances } = await supabase
+        .from('attendance_records')
+        .select('*');
+
+      // Mapeia alunos
+      const mappedStudents = students ? students.map(s => ({
+        id: s.id,
+        number: s.number,
+        name: s.name,
+        group: s.groups?.name,
+        avatarColor: '#4F46E5', // Padrão
+        parentEmail: s.parent_email
+      })) : [];
+      setAllStudents(mappedStudents);
+
+      // Agrupa horários por data
+      const newSchedulesData = {};
+      if (schedules) {
+        schedules.forEach(sched => {
+          const date = sched.date_str;
+          if (!newSchedulesData[date]) newSchedulesData[date] = [];
+          
+          // Verifica se já tem chamada (qualquer registro nesta schedule_id)
+          const classAttendances = attendances ? attendances.filter(a => a.schedule_id === sched.id) : [];
+          const isCompleted = classAttendances.length > 0;
+          const presentCount = classAttendances.filter(a => a.status === 'P').length;
+
+          // Reconstrói records se for completed
+          const attendanceRecords = {};
+          classAttendances.forEach(a => {
+            attendanceRecords[a.student_id] = a.status;
+          });
+
+          newSchedulesData[date].push({
+            id: sched.id,
+            timeStart: sched.time_start.substring(0, 5),
+            timeEnd: sched.time_end.substring(0, 5),
+            subject: sched.subject,
+            topic: sched.topic,
+            group: sched.groups?.name,
+            groupId: sched.group_id,
+            room: sched.room,
+            status: isCompleted ? 'completed' : 'pending',
+            studentsCount: mappedStudents.filter(s => s.group === sched.groups?.name).length || 1,
+            presentCount: isCompleted ? presentCount : null,
+            attendanceRecords: isCompleted ? attendanceRecords : null
+          });
+        });
+      }
+      setSchedulesData(newSchedulesData);
+    } catch (error) {
+      console.error('Erro ao buscar dados do Supabase:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const classesToday = schedulesData[selectedDate] || [];
 
@@ -212,23 +293,13 @@ export default function ScheduleScreen({ onLogout, teacherName = 'Prof. Carlos E
     setActiveClassForAttendance(item);
   };
 
-  const handleSaveAttendance = (updatedClassItem) => {
-    setSchedulesData((prev) => {
-      const dayList = prev[selectedDate] || [];
-      const exists = dayList.some((item) => item.id === updatedClassItem.id);
-      const updatedList = exists
-        ? dayList.map((item) => (item.id === updatedClassItem.id ? updatedClassItem : item))
-        : [...dayList, updatedClassItem];
-
-      return {
-        ...prev,
-        [selectedDate]: updatedList,
-      };
-    });
+  const handleSaveAttendance = async (updatedClassItem) => {
+    // A tela AttendanceScreen já salvou no Supabase, então só atualizamos a UI localmente ou recarregamos
+    await fetchData();
     setActiveClassForAttendance(null);
     Alert.alert(
       'Sucesso!',
-      `Chamada da turma ${updatedClassItem.group} salva com sucesso (${updatedClassItem.presentCount}/${updatedClassItem.studentsCount} presentes).`
+      `Chamada salva no Supabase. Os e-mails para os pais foram disparados! (${updatedClassItem.presentCount}/${updatedClassItem.studentsCount} presentes).`
     );
   };
 
@@ -303,6 +374,15 @@ export default function ScheduleScreen({ onLogout, teacherName = 'Prof. Carlos E
     );
   }
 
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={{ marginTop: 10, color: colors.textSecondary }}>Conectando ao Supabase...</Text>
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
@@ -337,8 +417,8 @@ export default function ScheduleScreen({ onLogout, teacherName = 'Prof. Carlos E
               <Ionicons name="calendar" size={18} color={colors.primary} style={{ marginRight: 6 }} />
               <Text style={styles.calendarTitle}>Meus Tempos de Aula</Text>
             </View>
-            {selectedDate !== '2026-07-20' && (
-              <TouchableOpacity onPress={() => setSelectedDate('2026-07-20')}>
+            {selectedDate !== todayStr && (
+              <TouchableOpacity onPress={() => setSelectedDate(todayStr)}>
                 <Text style={styles.todayButtonText}>Ver Hoje</Text>
               </TouchableOpacity>
             )}
@@ -396,7 +476,7 @@ export default function ScheduleScreen({ onLogout, teacherName = 'Prof. Carlos E
         {/* Título da Seção de Horários */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
-            Grade de Horários • {selectedDate === '2026-07-20' ? 'Hoje' : selectedDate.split('-').reverse().slice(0,2).join('/')}
+            Grade de Horários • {selectedDate === todayStr ? 'Hoje' : selectedDate.split('-').reverse().slice(0,2).join('/')}
           </Text>
 
           <TouchableOpacity

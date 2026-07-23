@@ -34,6 +34,7 @@ export default function UserModal({
   const [subject, setSubject] = useState(defaultSubjects[0]);
   const [group, setGroup] = useState(availableGroups[0] || 'Medicina 1');
   const [role, setRole] = useState(adminRoles[0]);
+  const [parentEmail, setParentEmail] = useState('');
 
   useEffect(() => {
     if (userToEdit) {
@@ -43,6 +44,7 @@ export default function UserModal({
       if (type === 'STUDENT') {
         setMatricula(userToEdit.matricula || '');
         setGroup(userToEdit.group || availableGroups[0] || 'Medicina 1');
+        setParentEmail(userToEdit.parentEmail || '');
       } else if (type === 'PROFESSOR') {
         setSubject(userToEdit.subject || defaultSubjects[0]);
       } else if (type === 'ADMIN') {
@@ -56,6 +58,7 @@ export default function UserModal({
       setSubject(defaultSubjects[0]);
       setGroup(availableGroups[0] || 'Medicina 1');
       setRole(adminRoles[0]);
+      setParentEmail('');
     }
   }, [userToEdit, visible, type, availableGroups]);
 
@@ -70,11 +73,16 @@ export default function UserModal({
         Alert.alert('Campo Obrigatório', 'Por favor, informe a Matrícula do aluno.');
         return;
       }
+      if (!parentEmail.trim() || !parentEmail.includes('@')) {
+        Alert.alert('Campo Inválido', 'Por favor, informe um E-mail do Responsável válido.');
+        return;
+      }
       onSave({
-        id: userToEdit ? userToEdit.id : Date.now().toString(),
+        id: userToEdit ? userToEdit.id : null, // ID gerado pelo DB, mas enviamos o original para saber se é UPDATE
         matricula: matricula.trim(),
         name: name.trim(),
         group,
+        parentEmail: parentEmail.trim(),
       });
     } else if (type === 'PROFESSOR') {
       if (!username.trim()) {
@@ -164,6 +172,19 @@ export default function UserModal({
                       placeholderTextColor={colors.placeholder}
                       value={name}
                       onChangeText={setName}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>E-mail do Responsável (Avisos de Falta)</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="Ex: pai@gmail.com"
+                      placeholderTextColor={colors.placeholder}
+                      value={parentEmail}
+                      onChangeText={setParentEmail}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
                     />
                   </View>
 

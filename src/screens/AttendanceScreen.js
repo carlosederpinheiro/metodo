@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
+import { supabase } from '../services/supabase';
 
 // Lista mockada de alunos da turma
 const mockStudentsList = [
@@ -46,9 +47,8 @@ const mockStudentsList = [
 export default function AttendanceScreen({ classItem, allStudents = [], onSave, onDelete, onBack }) {
   const isEditing = classItem.status === 'completed';
 
-  // Filtra os alunos cadastrados para a turma da aula (ou fallback para lista padrão)
-  const classStudents = allStudents.filter((s) => s.group === classItem.group);
-  const activeStudentsList = classStudents.length > 0 ? classStudents : mockStudentsList;
+  // Filtra os alunos cadastrados para a turma da aula
+  const activeStudentsList = allStudents.filter((s) => s.group === classItem.group);
 
   // Inicialização: Se estiver editando, carrega os registros salvos; senão, todos começam como 'P'
   const [attendance, setAttendance] = useState(() => {
@@ -108,27 +108,62 @@ export default function AttendanceScreen({ classItem, allStudents = [], onSave, 
     return true;
   });
 
-  const handleSave = () => {
-    Alert.alert(
-      isEditing ? 'Atualizar Chamada' : 'Salvar Chamada',
-      `Confirmar chamada para ${classItem.group}?\n\nPresentes: ${presentCount}\nFaltas: ${absentCount}`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: isEditing ? 'Salvar Alterações' : 'Salvar Chamada',
-          style: 'default',
-          onPress: () => {
-            onSave({
-              ...classItem,
-              status: 'completed',
-              presentCount,
-              studentsCount: totalStudents,
-              attendanceRecords: attendance,
-            });
+  const handleSave = async () => {
+    const message = isEditing 
+      ? `Atualizar chamada para ${classItem.group}?\n\nPresentes: ${presentCount}\nFaltas: ${absentCount}`
+      : `Confirmar chamada para ${classItem.group}?\n\nPresentes: ${presentCount}\nFaltas: ${absentCount}`;
+
+    const executeSave = async () => {
+      try {
+        if (isEditing) {
+          await supabase.from('attendance_records').delete().eq('schedule_id', classItem.id);
+        }
+
+        const recordsToInsert = activeStudentsList.map((student) => ({
+          schedule_id: classItem.id,
+          student_id: student.id,
+          status: attendance[student.id], // 'P' ou 'F'
+        }));
+
+        const { error } = await supabase.from('attendance_records').insert(recordsToInsert);
+        if (error) throw error;
+
+        onSave({
+          ...classItem,
+          status: 'completed',
+          presentCount,
+          studentsCount: totalStudents,
+          attendanceRecords: attendance,
+        });
+      } catch (err) {
+        if (Platform.OS === 'web') {
+          window.alert('Erro: Não foi possível salvar a chamada no Supabase.');
+        } else {
+          Alert.alert('Erro', 'Não foi possível salvar a chamada no Supabase.');
+        }
+        console.error(err);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(message);
+      if (confirmed) {
+        await executeSave();
+      }
+    } else {
+      Alert.alert(
+        isEditing ? 'Atualizar Chamada' : 'Salvar Chamada',
+        message,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: isEditing ? 'Salvar Alterações' : 'Salvar Chamada',
+            style: 'default',
+            onPress: executeSave,
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   const handleDelete = () => {

@@ -18,6 +18,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import PWAInstallPrompt from '../components/PWAInstallPrompt';
+import { supabase } from '../services/supabase';
 
 export default function LoginScreen({ onLogin }) {
   const [role, setRole] = useState('teacher'); // 'teacher' | 'admin'
@@ -49,21 +50,48 @@ export default function LoginScreen({ onLogin }) {
     return valid;
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!validate()) return;
 
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      if (onLogin) {
-        onLogin({ email: email.trim(), role });
-      } else {
-        Alert.alert(
-          'Sucesso',
-          `Bem-vindo ao Método Pré-Vestibular! Login realizado com sucesso.`
-        );
+    
+    try {
+      const { data, error } = await supabase.rpc('login_user', {
+        p_username: email.trim(),
+        p_password: password.trim(),
+        p_role: role
+      });
+
+      if (error) {
+        throw error;
       }
-    }, 600);
+
+      if (data && data.error) {
+        if (Platform.OS === 'web') {
+          window.alert(data.error);
+        } else {
+          Alert.alert('Erro no Login', data.error);
+        }
+        setLoading(false);
+        return;
+      }
+
+      if (data && data.id) {
+        if (onLogin) {
+          // Repassa o objeto de usuário completo retornado pela RPC
+          onLogin(data);
+        }
+      }
+    } catch (err) {
+      if (Platform.OS === 'web') {
+        window.alert('Erro de Conexão: Não foi possível contatar o servidor.');
+      } else {
+        Alert.alert('Erro de Conexão', 'Não foi possível contatar o servidor.');
+      }
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const renderContent = () => (

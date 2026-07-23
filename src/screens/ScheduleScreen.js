@@ -19,175 +19,28 @@ import AttendanceScreen from './AttendanceScreen';
 import NewCallModal from '../components/NewCallModal';
 import { supabase } from '../services/supabase';
 
-// Dados simulados de tempos de aula por data
-const mockSchedules = {
-  '2026-07-20': [ // Segunda-feira
-    {
-      id: '1',
-      timeStart: '07:15',
-      timeEnd: '08:05',
-      subject: 'Física A',
-      topic: 'Cinemática Escalar e VET',
-      group: 'Turma Medicina 1',
-      room: 'Sala 02 - Prédio A',
-      status: 'completed', // completed, ongoing, upcoming, pending
-      studentsCount: 42,
-      presentCount: 40,
-    },
-    {
-      id: '2',
-      timeStart: '08:05',
-      timeEnd: '08:55',
-      subject: 'Física A',
-      topic: 'Movimento Uniformemente Variado',
-      group: 'Turma Medicina 1',
-      room: 'Sala 02 - Prédio A',
-      status: 'completed',
-      studentsCount: 42,
-      presentCount: 41,
-    },
-    {
-      id: '3',
-      timeStart: '09:15',
-      timeEnd: '10:05',
-      subject: 'Física B',
-      topic: 'Termodinâmica e Gases',
-      group: 'Extensivo Manhã',
-      room: 'Auditório Principal',
-      status: 'ongoing',
-      studentsCount: 65,
-      presentCount: null,
-    },
-    {
-      id: '4',
-      timeStart: '10:05',
-      timeEnd: '10:55',
-      subject: 'Física B',
-      topic: 'Leis da Termodinâmica',
-      group: 'Extensivo Manhã',
-      room: 'Auditório Principal',
-      status: 'upcoming',
-      studentsCount: 65,
-      presentCount: null,
-    },
-    {
-      id: '5',
-      timeStart: '14:00',
-      timeEnd: '14:50',
-      subject: 'Física C (Plantão)',
-      topic: 'Resolução de Exercícios Fuvest',
-      group: 'Turma ITA / IME',
-      room: 'Laboratório 01',
-      status: 'pending',
-      studentsCount: 25,
-      presentCount: null,
-    },
-  ],
-  '2026-07-21': [ // Terça-feira
-    {
-      id: '6',
-      timeStart: '07:15',
-      timeEnd: '08:05',
-      subject: 'Física A',
-      topic: 'Dinamica e Leis de Newton',
-      group: 'Semiextensivo Manhã',
-      room: 'Sala 05 - Prédio B',
-      status: 'upcoming',
-      studentsCount: 38,
-      presentCount: null,
-    },
-    {
-      id: '7',
-      timeStart: '08:05',
-      timeEnd: '08:55',
-      subject: 'Física A',
-      topic: 'Aplicações de Força de Atrito',
-      group: 'Semiextensivo Manhã',
-      room: 'Sala 05 - Prédio B',
-      status: 'upcoming',
-      studentsCount: 38,
-      presentCount: null,
-    },
-    {
-      id: '8',
-      timeStart: '10:05',
-      timeEnd: '10:55',
-      subject: 'Física C',
-      topic: 'Óptica Geométrica',
-      group: 'Turma Medicina 2',
-      room: 'Sala 03 - Prédio A',
-      status: 'upcoming',
-      studentsCount: 40,
-      presentCount: null,
-    },
-  ],
-  '2026-07-22': [ // Quarta-feira
-    {
-      id: '9',
-      timeStart: '09:15',
-      timeEnd: '10:05',
-      subject: 'Física B',
-      topic: 'Eletrostática e Cargas',
-      group: 'Turma Medicina 1',
-      room: 'Sala 02 - Prédio A',
-      status: 'upcoming',
-      studentsCount: 42,
-      presentCount: null,
-    },
-    {
-      id: '10',
-      timeStart: '10:05',
-      timeEnd: '10:55',
-      subject: 'Física B',
-      topic: 'Campo Elétrico e Potencial',
-      group: 'Turma Medicina 1',
-      room: 'Sala 02 - Prédio A',
-      status: 'upcoming',
-      studentsCount: 42,
-      presentCount: null,
-    },
-  ],
-  '2026-07-23': [ // Quinta-feira
-    {
-      id: '11',
-      timeStart: '07:15',
-      timeEnd: '08:05',
-      subject: 'Física A',
-      topic: 'Trabalho e Energia',
-      group: 'Extensivo Manhã',
-      room: 'Auditório Principal',
-      status: 'upcoming',
-      studentsCount: 65,
-      presentCount: null,
-    },
-  ],
-  '2026-07-24': [ // Sexta-feira
-    {
-      id: '12',
-      timeStart: '14:00',
-      timeEnd: '15:40',
-      subject: 'Simulado de Física',
-      topic: 'Revisão Geral do Módulo 1',
-      group: 'Todas as Turmas',
-      room: 'Auditório Central',
-      status: 'upcoming',
-      studentsCount: 120,
-      presentCount: null,
-    },
-  ],
+// Geração dinâmica dos dias da semana (começando 2 dias atrás até 4 dias pra frente)
+const generateWeekDays = () => {
+  const days = [];
+  const today = new Date();
+  const dayNames = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+  
+  for (let i = -2; i <= 4; i++) {
+    const d = new Date();
+    d.setDate(today.getDate() + i);
+    days.push({
+      dayName: dayNames[d.getDay()],
+      dayNum: d.getDate().toString().padStart(2, '0'),
+      dateStr: d.toLocaleDateString('en-CA'),
+      isToday: i === 0,
+    });
+  }
+  return days;
 };
 
-// Dias da semana simulados para o carrossel
-const weekDays = [
-  { dayName: 'SEG', dayNum: '20', dateStr: '2026-07-20', isToday: true },
-  { dayName: 'TER', dayNum: '21', dateStr: '2026-07-21', isToday: false },
-  { dayName: 'QUA', dayNum: '22', dateStr: '2026-07-22', isToday: false },
-  { dayName: 'QUI', dayNum: '23', dateStr: '2026-07-23', isToday: false },
-  { dayName: 'SEX', dayNum: '24', dateStr: '2026-07-24', isToday: false },
-  { dayName: 'SÁB', dayNum: '25', dateStr: '2026-07-25', isToday: false },
-];
+const weekDays = generateWeekDays();
 
-export default function ScheduleScreen({ onLogout, teacherName = 'Prof. Carlos Eder' }) {
+export default function ScheduleScreen({ onLogout, teacherName = 'Prof. Carlos Eder', teacherId = null }) {
   // Ajuste para hoje (YYYY-MM-DD local)
   const todayStr = new Date().toLocaleDateString('en-CA');
   
@@ -200,15 +53,21 @@ export default function ScheduleScreen({ onLogout, teacherName = 'Prof. Carlos E
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [teacherId]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Busca as turmas e professores para relacionar
-      const { data: schedules } = await supabase
+      // Busca as turmas e professores para relacionar (filtra pelo professor se houver id)
+      let schedulesQuery = supabase
         .from('master_schedules')
         .select('*, groups(name), professors(name)');
+        
+      if (teacherId) {
+        schedulesQuery = schedulesQuery.eq('professor_id', teacherId);
+      }
+      
+      const { data: schedules } = await schedulesQuery;
       
       const { data: students } = await supabase
         .from('students')

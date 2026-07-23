@@ -115,17 +115,17 @@ export default function AttendanceScreen({ classItem, allStudents = [], onSave, 
 
     const executeSave = async () => {
       try {
-        if (isEditing) {
-          await supabase.from('attendance_records').delete().eq('schedule_id', classItem.id);
-        }
-
         const recordsToInsert = activeStudentsList.map((student) => ({
           schedule_id: classItem.id,
           student_id: student.id,
           status: attendance[student.id], // 'P' ou 'F'
         }));
 
-        const { error } = await supabase.from('attendance_records').insert(recordsToInsert);
+        // Usa upsert para não apagar o histórico de quem já estava na chamada, apenas atualiza
+        const { error } = await supabase
+          .from('attendance_records')
+          .upsert(recordsToInsert, { onConflict: 'schedule_id, student_id' });
+        
         if (error) throw error;
 
         onSave({

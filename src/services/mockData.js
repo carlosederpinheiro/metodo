@@ -17,16 +17,17 @@ export const initialRooms = [
 ];
 
 export const defaultSubjects = [
-  'Física A',
-  'Física B',
-  'Física C',
-  'Matemática I',
-  'Matemática II',
-  'Química Geral',
-  'Química Orgânica',
-  'Biologia I',
-  'Gramática & Redação',
-  'História Geral',
+  'Literatura',
+  'Língua Portuguesa',
+  'Matemática',
+  'Química',
+  'Física',
+  'Biologia',
+  'Geografia',
+  'História',
+  'Sociologia',
+  'Filosofia',
+  'Redação',
 ];
 
 export const initialProfessors = [

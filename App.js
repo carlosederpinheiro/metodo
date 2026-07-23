@@ -3,14 +3,7 @@ import { Platform } from 'react-native';
 import LoginScreen from './src/screens/LoginScreen';
 import ScheduleScreen from './src/screens/ScheduleScreen';
 import AdminHomeScreen from './src/screens/AdminHomeScreen';
-import {
-  initialProfessors,
-  initialStudents,
-  initialAdmins,
-  initialGroups,
-  initialRooms,
-  initialMasterSchedule,
-} from './src/services/mockData';
+// Dados removidos (100% via banco)
 
 // Injeção de CSS global para congelar a janela inteira e eliminar qualquer scrollbar de página
 if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -67,31 +60,59 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState(null); // { email, role: 'teacher' | 'admin' }
+  const [user, setUser] = useState(null);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
 
   // Estados Centrais do Sistema
-  const [professors, setProfessors] = useState(initialProfessors);
-  const [students, setStudents] = useState(initialStudents);
-  const [admins, setAdmins] = useState(initialAdmins);
-  const [groups, setGroups] = useState(initialGroups);
-  const [rooms, setRooms] = useState(initialRooms);
-  const [masterSchedule, setMasterSchedule] = useState(initialMasterSchedule);
+  const [professors, setProfessors] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [admins, setAdmins] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [rooms, setRooms] = useState([]);
+  const [masterSchedule, setMasterSchedule] = useState([]);
+
+  React.useEffect(() => {
+    if (Platform.OS === 'web') {
+      try {
+        const savedSession = window.localStorage.getItem('metodo_session');
+        if (savedSession) {
+          const parsedUser = JSON.parse(savedSession);
+          setUser(parsedUser);
+          setIsAuthenticated(true);
+        }
+      } catch (e) {
+        console.error('Erro ao ler sessão:', e);
+      }
+    }
+    setIsCheckingSession(false);
+  }, []);
 
   const handleLogin = (userInfo) => {
     setUser(userInfo);
     setIsAuthenticated(true);
+    if (Platform.OS === 'web') {
+      window.localStorage.setItem('metodo_session', JSON.stringify(userInfo));
+    }
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
     setUser(null);
+    if (Platform.OS === 'web') {
+      window.localStorage.removeItem('metodo_session');
+    }
   };
+
+  if (isCheckingSession) {
+    return null; // Pode colocar uma tela de loading aqui se quiser
+  }
 
   if (!isAuthenticated) {
     return <LoginScreen onLogin={handleLogin} />;
   }
 
-  if (user?.role === 'admin') {
+  // Verifica se é administrador (tem cargo no DB)
+  if (user?.role) {
     return (
       <AdminHomeScreen
         professors={professors}
@@ -107,15 +128,17 @@ export default function App() {
         masterSchedule={masterSchedule}
         setMasterSchedule={setMasterSchedule}
         onLogout={handleLogout}
-        adminName={user?.email ? `Admin (${user.email.split('@')[0]})` : 'Diretoria Método'}
+        adminName={user?.name ? user.name : 'Diretoria Método'}
       />
     );
   }
 
+  // Se não tem role, é professor
   return (
     <ScheduleScreen
       onLogout={handleLogout}
-      teacherName={user?.email ? `Prof. ${user.email.split('@')[0]}` : 'Prof. Carlos Eder'}
+      teacherName={user?.name ? user.name : 'Prof. Carlos Eder'}
+      teacherId={user?.id}
       allStudents={students}
     />
   );

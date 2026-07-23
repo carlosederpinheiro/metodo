@@ -24,6 +24,7 @@ export default function UserModal({
   type,
   userToEdit,
   availableGroups = [],
+  studentsList = [],
   onSave,
   onClose,
 }) {
@@ -54,7 +55,23 @@ export default function UserModal({
       setName('');
       setUsername('');
       setPassword('Metodo2026@@');
-      setMatricula(Date.now().toString().slice(-6));
+      
+      if (type === 'STUDENT') {
+        let maxNum = 0;
+        studentsList.forEach(s => {
+          if (s.matricula && s.matricula.startsWith('Metodo2026')) {
+            const numPart = parseInt(s.matricula.replace('Metodo2026', ''), 10);
+            if (!isNaN(numPart) && numPart > maxNum) {
+              maxNum = numPart;
+            }
+          }
+        });
+        const nextNum = maxNum + 1;
+        setMatricula(`Metodo2026${String(nextNum).padStart(3, '0')}`);
+      } else {
+        setMatricula('');
+      }
+
       setSubject(defaultSubjects[0]);
       setGroup(availableGroups[0] || 'Medicina 1');
       setRole(adminRoles[0]);
@@ -90,7 +107,7 @@ export default function UserModal({
         return;
       }
       onSave({
-        id: userToEdit ? userToEdit.id : Date.now().toString(),
+        id: userToEdit ? userToEdit.id : null,
         name: name.trim(),
         username: username.trim().toLowerCase(),
         password: password.trim() || 'Metodo2026@@',
@@ -102,7 +119,7 @@ export default function UserModal({
         return;
       }
       onSave({
-        id: userToEdit ? userToEdit.id : Date.now().toString(),
+        id: userToEdit ? userToEdit.id : null,
         name: name.trim(),
         username: username.trim().toLowerCase(),
         password: password.trim() || 'Metodo2026@@',

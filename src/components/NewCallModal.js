@@ -24,7 +24,7 @@ const defaultGroups = [
   'Turma Extensiva Noite',
 ];
 
-const defaultSubjects = ['Física A', 'Física B', 'Física C', 'Plantão de Dúvidas'];
+const defaultSubjects = ['Literatura', 'Língua Portuguesa', 'Matemática', 'Química', 'Física', 'Biologia', 'Geografia', 'História', 'Sociologia', 'Filosofia', 'Redação', 'Plantão de Dúvidas'];
 
 export default function NewCallModal({ visible, onClose, onCreate }) {
   const [group, setGroup] = useState('Turma Medicina 1');

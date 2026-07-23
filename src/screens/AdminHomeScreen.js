@@ -81,9 +81,12 @@ export default function AdminHomeScreen({
       const { data: groupsData } = await supabase.from('groups').select('*');
       if (groupsData) {
         setDbGroups(groupsData);
-        setGroups(groupsData.map(g => g.name)); // Popula o dropdown
+        setGroups(groupsData.map(g => g.name)); 
       }
-
+      const { data: roomsData } = await supabase.from('rooms').select('*');
+      if (roomsData) {
+        setRooms(roomsData.map(r => r.name)); 
+      }
       const { data: studentsData } = await supabase.from('students').select('*, groups(name)');
       if (studentsData) {
         setStudents(studentsData.map(s => ({
@@ -95,6 +98,27 @@ export default function AdminHomeScreen({
           parentEmail: s.parent_email,
         })));
       }
+      const { data: professorsData } = await supabase.from('professors').select('*');
+      if (professorsData) setProfessors(professorsData);
+      
+      const { data: adminsData } = await supabase.from('admins').select('*');
+      if (adminsData) setAdmins(adminsData);
+      
+      const { data: schedulesData } = await supabase.from('master_schedules').select('*, groups(name), professors(name)');
+      if (schedulesData) {
+        setMasterSchedule(schedulesData.map(s => ({
+          id: s.id,
+          teacherId: s.professor_id,
+          teacherName: s.professors?.name,
+          dateStr: s.date_str,
+          timeStart: s.time_start.substring(0,5),
+          timeEnd: s.time_end.substring(0,5),
+          subject: s.subject,
+          group: s.groups?.name,
+          room: s.room,
+          status: 'pending',
+        })));
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -102,7 +126,6 @@ export default function AdminHomeScreen({
     }
   };
 
-  // --- HANDLERS USER CRUD ---
   const handleOpenNewUser = (type) => {
     setUserModalType(type);
     setEditingUser(null);
@@ -117,34 +140,39 @@ export default function AdminHomeScreen({
 
   const handleDeleteUser = async (type, user) => {
     const label = type === 'PROFESSOR' ? 'professor' : type === 'STUDENT' ? 'aluno' : 'administrador';
-    const msg = `Tem certeza que deseja excluir o ${label} "${user.name}"?`;
-    
     const deleteAction = async () => {
-      if (type === 'STUDENT') {
-        try {
-          // Primeiro remove possíveis chamadas para evitar erro de FK
+      try {
+        if (type === 'STUDENT') {
           await supabase.from('attendance_records').delete().eq('student_id', user.id);
           const { error } = await supabase.from('students').delete().eq('id', user.id);
           if (error) throw error;
-          setStudents((prev) => prev.filter((s) => s.id !== user.id));
-          Alert.alert('Sucesso', 'Aluno removido com sucesso do banco de dados.');
-        } catch (e) {
-          Alert.alert('Erro', 'Não foi possível remover o aluno.');
-          console.error(e);
+        } else if (type === 'PROFESSOR') {
+          // Remove cascade dependentes do professor
+          const schedules = await supabase.from('master_schedules').select('id').eq('professor_id', user.id);
+          if (schedules.data && schedules.data.length > 0) {
+             const scheduleIds = schedules.data.map(s => s.id);
+             await supabase.from('attendance_records').delete().in('schedule_id', scheduleIds);
+          }
+          await supabase.from('master_schedules').delete().eq('professor_id', user.id);
+          const { error } = await supabase.from('professors').delete().eq('id', user.id);
+          if (error) throw error;
+        } else if (type === 'ADMIN') {
+          const { error } = await supabase.from('admins').delete().eq('id', user.id);
+          if (error) throw error;
         }
-      } else if (type === 'PROFESSOR') {
-        setProfessors((prev) => prev.filter((p) => p.id !== user.id));
-        Alert.alert('Sucesso', 'Cadastro removido localmente.');
-      } else {
-        setAdmins((prev) => prev.filter((a) => a.id !== user.id));
-        Alert.alert('Sucesso', 'Cadastro removido localmente.');
+        await fetchDbData();
+        Alert.alert('Sucesso', 'Registro removido com sucesso.');
+      } catch (e) {
+        Alert.alert('Erro', 'Não foi possível remover o registro.');
+        console.error(e);
       }
     };
-
     if (Platform.OS === 'web') {
-      if (window.confirm(msg)) await deleteAction();
+      if (window.confirm(`Tem certeza que deseja excluir o ${label} "${user.name}"?`)) {
+        deleteAction();
+      }
     } else {
-      Alert.alert('Excluir Registro', msg, [
+      Alert.alert('Confirmar Exclusão', `Tem certeza que deseja excluir o ${label} "${user.name}"?`, [
         { text: 'Cancelar', style: 'cancel' },
         { text: 'Excluir', style: 'destructive', onPress: deleteAction },
       ]);
@@ -152,52 +180,47 @@ export default function AdminHomeScreen({
   };
 
   const handleSaveUser = async (userData) => {
-    if (userModalType === 'STUDENT') {
-      try {
+    try {
+      const isUpdate = userData.id && userData.id.length > 20;
+      
+      if (userModalType === 'STUDENT') {
         const targetGroup = dbGroups.find(g => g.name === userData.group);
-        if (!targetGroup) {
-          Alert.alert('Erro', 'Turma não encontrada no Banco de Dados.');
-          return;
-        }
+        if (!targetGroup) return Alert.alert('Erro', 'Turma não encontrada no Banco de Dados.');
 
-        const isUpdate = userData.id !== null;
-        
         const payload = {
           name: userData.name,
           number: userData.matricula,
           group_id: targetGroup.id,
           parent_email: userData.parentEmail
         };
-
-        if (isUpdate) {
-          const { error } = await supabase.from('students').update(payload).eq('id', userData.id);
-          if (error) throw error;
-        } else {
-          const { error } = await supabase.from('students').insert([payload]);
-          if (error) throw error;
-        }
+        if (isUpdate) await supabase.from('students').update(payload).eq('id', userData.id);
+        else await supabase.from('students').insert([payload]);
         
-        await fetchDbData(); // Recarrega a lista oficial do banco
-        Alert.alert('Sucesso', 'Aluno salvo com sucesso no banco de dados!');
+      } else if (userModalType === 'PROFESSOR') {
+        const payload = { name: userData.name, username: userData.username, subject: userData.subject };
+        if (userData.password && userData.password !== 'Metodo2026@@') payload.password_hash = userData.password;
+        else if (!isUpdate) payload.password_hash = 'Metodo2026@@';
 
-      } catch (e) {
-        Alert.alert('Erro', 'Ocorreu um erro ao salvar o aluno no banco.');
-        console.error(e);
+        if (isUpdate) await supabase.from('professors').update(payload).eq('id', userData.id);
+        else await supabase.from('professors').insert([payload]);
+
+      } else if (userModalType === 'ADMIN') {
+        const payload = { name: userData.name, username: userData.username, role: userData.role };
+        if (userData.password && userData.password !== 'Metodo2026@@') payload.password_hash = userData.password;
+        else if (!isUpdate) payload.password_hash = 'Metodo2026@@';
+
+        if (isUpdate) await supabase.from('admins').update(payload).eq('id', userData.id);
+        else await supabase.from('admins').insert([payload]);
       }
-    } else if (userModalType === 'PROFESSOR') {
-      setProfessors((prev) => {
-        const exists = prev.some((p) => p.id === userData.id);
-        return exists ? prev.map((p) => (p.id === userData.id ? userData : p)) : [userData, ...prev];
-      });
-    } else if (userModalType === 'ADMIN') {
-      setAdmins((prev) => {
-        const exists = prev.some((a) => a.id === userData.id);
-        return exists ? prev.map((a) => (a.id === userData.id ? userData : a)) : [userData, ...prev];
-      });
+      
+      await fetchDbData();
+      Alert.alert('Sucesso', 'Registro salvo com sucesso!');
+    } catch (e) {
+      Alert.alert('Erro', 'Ocorreu um erro ao salvar o registro no banco.');
+      console.error(e);
     }
   };
 
-  // --- HANDLERS GRADE HORÁRIA ---
   const handleOpenNewSchedule = () => {
     setEditingScheduleItem(null);
     setIsScheduleModalVisible(true);
@@ -208,73 +231,106 @@ export default function AdminHomeScreen({
     setIsScheduleModalVisible(true);
   };
 
-  const handleDeleteSchedule = (item) => {
+  const handleDeleteSchedule = async (item) => {
     const msg = `Remover aula de ${item.subject} (${item.teacherName}) da grade?`;
-    const deleteAction = () => {
-      setMasterSchedule((prev) => prev.filter((s) => s.id !== item.id));
-      Alert.alert('Sucesso', 'Horário removido da grade.');
+    const deleteAction = async () => {
+      try {
+        await supabase.from('attendance_records').delete().eq('schedule_id', item.id);
+        const { error } = await supabase.from('master_schedules').delete().eq('id', item.id);
+        if (error) throw error;
+        await fetchDbData();
+        Alert.alert('Sucesso', 'Horário removido da grade.');
+      } catch (e) {
+        Alert.alert('Erro', 'Não foi possível remover a grade.');
+        console.error(e);
+      }
     };
 
     if (Platform.OS === 'web') {
       if (window.confirm(msg)) deleteAction();
     } else {
-      Alert.alert('Remover da Grade', msg, [
+      Alert.alert('Atenção', msg, [
         { text: 'Cancelar', style: 'cancel' },
-        { text: 'Remover', style: 'destructive', onPress: deleteAction },
+        { text: 'Remover', style: 'destructive', onPress: deleteAction }
       ]);
     }
   };
 
-  const handleSaveSchedule = (scheduleData) => {
-    setMasterSchedule((prev) => {
-      const exists = prev.some((s) => s.id === scheduleData.id);
-      return exists
-        ? prev.map((s) => (s.id === scheduleData.id ? scheduleData : s))
-        : [scheduleData, ...prev];
-    });
+  const handleSaveSchedule = async (scheduleData) => {
+    try {
+      const isUpdate = scheduleData.id && scheduleData.id.length > 20;
+      const targetGroup = dbGroups.find(g => g.name === scheduleData.group);
+      
+      const payload = {
+        professor_id: scheduleData.teacherId,
+        group_id: targetGroup?.id,
+        subject: scheduleData.subject,
+        room: scheduleData.room,
+        date_str: scheduleData.dateStr,
+        time_start: scheduleData.timeStart,
+        time_end: scheduleData.timeEnd
+      };
+
+      if (isUpdate) await supabase.from('master_schedules').update(payload).eq('id', scheduleData.id);
+      else await supabase.from('master_schedules').insert([payload]);
+      
+      await fetchDbData();
+      Alert.alert('Sucesso', 'Tempo inserido com sucesso!');
+    } catch (e) {
+      Alert.alert('Erro', 'Erro ao salvar a grade no banco de dados.');
+      console.error(e);
+    }
   };
 
-  // --- HANDLERS TURMAS & SALAS ---
+  const handleOpenGroupRoomConfig = () => {
+    setIsGroupRoomModalVisible(true);
+  };
+
+  const handleDeleteGroupRoom = async (type, itemName) => {
+    const table = type === 'GROUP' ? 'groups' : 'rooms';
+    const deleteAction = async () => {
+      try {
+        const { error } = await supabase.from(table).delete().eq('name', itemName);
+        if (error) throw error;
+        await fetchDbData();
+        Alert.alert('Sucesso', 'Removido com sucesso do banco de dados.');
+      } catch (e) {
+        Alert.alert('Erro', 'Erro ao remover. Pode haver registros dependentes.');
+        console.error(e);
+      }
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Excluir permanentemente ${itemName}?`)) deleteAction();
+    } else {
+      Alert.alert('Confirmar Exclusão', `Excluir permanentemente ${itemName}?`, [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Excluir', style: 'destructive', onPress: deleteAction }
+      ]);
+    }
+  };
+
+  const handleSaveGroupRoom = async (type, originalName, newName) => {
+    const table = type === 'GROUP' ? 'groups' : 'rooms';
+    try {
+      if (originalName) {
+        await supabase.from(table).update({ name: newName }).eq('name', originalName);
+      } else {
+        await supabase.from(table).insert([{ name: newName }]);
+      }
+      await fetchDbData();
+      Alert.alert('Sucesso', 'Salvo com sucesso.');
+    } catch (e) {
+      Alert.alert('Erro', 'Não foi possível salvar no banco.');
+      console.error(e);
+    }
+  };
+
   const handleOpenGroupRoomModal = (type, item = null) => {
     setGroupRoomType(type);
     setEditingGroupRoom(item);
     setIsGroupRoomModalVisible(true);
   };
 
-  const handleSaveGroupRoom = (newName, oldName) => {
-    if (groupRoomType === 'GROUP') {
-      setGroups((prev) => {
-        if (oldName) return prev.map((g) => (g === oldName ? newName : g));
-        if (prev.includes(newName)) return prev;
-        return [...prev, newName];
-      });
-    } else {
-      setRooms((prev) => {
-        if (oldName) return prev.map((r) => (r === oldName ? newName : r));
-        if (prev.includes(newName)) return prev;
-        return [...prev, newName];
-      });
-    }
-  };
-
-  const handleDeleteGroupRoom = (type, item) => {
-    const label = type === 'GROUP' ? 'turma' : 'sala';
-    const msg = `Remover a ${label} "${item}"?`;
-    const deleteAction = () => {
-      if (type === 'GROUP') setGroups((prev) => prev.filter((g) => g !== item));
-      else setRooms((prev) => prev.filter((r) => r !== item));
-      Alert.alert('Sucesso', `${type === 'GROUP' ? 'Turma' : 'Sala'} removida.`);
-    };
-
-    if (Platform.OS === 'web') {
-      if (window.confirm(msg)) deleteAction();
-    } else {
-      Alert.alert(`Remover ${type === 'GROUP' ? 'Turma' : 'Sala'}`, msg, [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Remover', style: 'destructive', onPress: deleteAction },
-      ]);
-    }
-  };
 
   // Filtragens
   const filteredProfessors = professors.filter(
@@ -815,6 +871,7 @@ export default function AdminHomeScreen({
         type={userModalType}
         userToEdit={editingUser}
         availableGroups={groups}
+        studentsList={students}
         onSave={handleSaveUser}
         onClose={() => setIsUserModalVisible(false)}
       />
@@ -833,7 +890,7 @@ export default function AdminHomeScreen({
         visible={isGroupRoomModalVisible}
         type={groupRoomType}
         itemToEdit={editingGroupRoom}
-        onSave={handleSaveGroupRoom}
+        onSave={(newName, oldName) => handleSaveGroupRoom(groupRoomType, oldName, newName)}
         onClose={() => setIsGroupRoomModalVisible(false)}
       />
 
